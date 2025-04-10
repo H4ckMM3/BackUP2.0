@@ -252,79 +252,93 @@ class FtpBackupManager:
             sublime.status_message(f"FTP Backup ERROR: {e}")
             return None, None
 
-    def create_backup_zip(self, folder_path, folder_type=None):
-        """
-        Создание ZIP-архива указанной папки бэкапа
-        folder_path: путь к папке с бэкапами
-        folder_type: 'before', 'after' или None (полная папка)
-        """
-        try:
-            if not os.path.exists(folder_path):
-                self.logger.error(f"Папка для архивации не существует: {folder_path}")
-                return None
-            
-            folder_parts = folder_path.split(os.sep)
-            site_name = None
-            
-            # Попытка извлечь имя сайта из пути
-            for part in folder_parts:
-                if re.match(r'[\w\-_.]+', part) and not part.startswith('task_') and part not in ['before', 'after']:
-                    site_name = part
-                    break
-            
-            if not site_name:
-                site_name = "backup"
-            
-            # Формируем имя архива
-            date_str = datetime.now().strftime("%d.%m.%Y.%H%M")
-            if folder_type:
-                zip_name = f"backup_{site_name}_{folder_type}_{date_str}.zip"
-            else:
-                zip_name = f"backup_{site_name}_{date_str}.zip"
-            
-            # Определяем, находится ли путь в папке задачи
-            task_folder = None
-            path_parts = folder_path.split(os.sep)
-            for i, part in enumerate(path_parts):
-                if part.startswith('task_'):
-                    task_folder = os.path.join(*path_parts[:i+1])
-                    break
-            
-            # Если находимся в папке задачи или её подпапке, создаем ZIP в папке задачи
-            if task_folder:
-                zip_path = os.path.join(task_folder, zip_name)
-            else:
-                # Если находимся в папке месяца, создаем ZIP там
-                month_year_folder = os.path.dirname(folder_path)
-                if os.path.basename(folder_path) in ['before', 'after']:
-                    zip_path = os.path.join(month_year_folder, zip_name)
-                else:
-                    # Иначе создаем в текущей директории
-                    zip_path = os.path.join(folder_path, zip_name)
-            
-            # Создаем архив
-            self.logger.debug(f"Создание архива: {zip_path}")
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root, dirs, files in os.walk(folder_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, folder_path)
-                        zipf.write(file_path, arcname)
-                        self.logger.debug(f"Добавлен файл {arcname}")
-            
-            self.logger.debug(f"Архив успешно создан: {zip_path}")
-            
-            # Сбрасываем текущий номер задачи после создания архива
-            global CURRENT_TASK_NUMBER
-            CURRENT_TASK_NUMBER = None
-            self.logger.debug("Номер текущей задачи сброшен после создания архива")
-            
-            return zip_path
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка создания архива: {e}")
+def create_backup_zip(self, folder_path, folder_type=None):
+    """
+    Создание ZIP-архива указанной папки бэкапа
+    folder_path: путь к папке с бэкапами
+    folder_type: 'before', 'after' или None (полная папка)
+    """
+    try:
+        if not os.path.exists(folder_path):
+            self.logger.error(f"Папка для архивации не существует: {folder_path}")
             return None
-
+        
+        # Приводим путь к стандартному виду Windows
+        folder_path = os.path.normpath(folder_path)
+        
+        # Извлекаем имя сайта безопасным способом
+        folder_parts = folder_path.split(os.sep)
+        # Удаляем пустые элементы
+        folder_parts = [part for part in folder_parts if part]
+        
+        # Находим имя сайта 
+        site_name = "backup"  # значение по умолчанию
+        for part in folder_parts:
+            if re.match(r'[\w\-_.]+', part) and not part.startswith('task_') and part not in ['before', 'after']:
+                site_name = part
+                break
+        
+        # Формируем безопасное имя архива без недопустимых символов
+        safe_site_name = re.sub(r'[\\/:*?"<>|]', '_', site_name)
+        date_str = datetime.now().strftime("%d.%m.%Y.%H%M")
+        
+        if folder_type:
+            zip_name = f"backup_{safe_site_name}_{folder_type}_{date_str}.zip"
+        else:
+            zip_name = f"backup_{safe_site_name}_{date_str}.zip"
+        
+        # Определяем папку для создания архива
+        if any(part.startswith('task_') for part in folder_parts):
+            # Если находимся в папке задачи
+            for i, part in enumerate(folder_parts):
+                if part.startswith('task_'):
+                    task_folder_index = i
+                    break
+            
+            # Формируем путь до папки задачи (включительно)
+            task_path_parts = folder_parts[:task_folder_index+1]
+            # Если Windows путь, добавляем диск
+            if ':' in folder_path:
+                zip_dir = os.path.join(folder_path.split(':')[0] + ':', os.sep, *task_path_parts)
+            else:
+                zip_dir = os.path.join(os.sep, *task_path_parts)
+        else:
+            # Если находимся в папке месяца или корневой папке
+            zip_dir = os.path.dirname(folder_path)
+            
+            # Если текущая папка - before/after, поднимаемся на уровень выше
+            if os.path.basename(folder_path) in ['before', 'after']:
+                zip_dir = os.path.dirname(zip_dir)
+        
+        # Формируем полный путь к ZIP
+        zip_path = os.path.join(zip_dir, zip_name)
+        
+        # Убеждаемся, что директория существует
+        os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+        
+        self.logger.debug(f"Создание архива: {zip_path}")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, folder_path)
+                    zipf.write(file_path, arcname)
+                    self.logger.debug(f"Добавлен файл {arcname}")
+        
+        self.logger.debug(f"Архив успешно создан: {zip_path}")
+        
+        # Сбрасываем текущий номер задачи после создания архива
+        global CURRENT_TASK_NUMBER
+        CURRENT_TASK_NUMBER = None
+        self.logger.debug("Номер текущей задачи сброшен после создания архива")
+        
+        return zip_path
+        
+    except Exception as e:
+        self.logger.error(f"Ошибка создания архива: {e}")
+        return None
+        
+        
     def _save_config(self):
         """Сохранение конфигурации с расширенной отладкой"""
         try:
@@ -618,10 +632,12 @@ class FtpBackupCreateZipCommand(sublime_plugin.WindowCommand):
         backup_manager = FtpBackupManager(self.backup_root)
         
         try:
+            zip_path = None
+            
             # Парсим выбранную опцию
             if selected.startswith('[Весь месяц]'):
                 # Архивируем всю папку месяца
-                zip_path = backup_manager.create_backup_zip(self.month_path)
+                zip_path = self.create_zip_archive(backup_manager, self.month_path)
                 
             elif selected.startswith('[Before]') or selected.startswith('[After]'):
                 folder_type = 'before' if selected.startswith('[Before]') else 'after'
@@ -634,15 +650,15 @@ class FtpBackupCreateZipCommand(sublime_plugin.WindowCommand):
                     task_name = selected.split('] ')[1]
                     folder_path = os.path.join(self.month_path, task_name, folder_type)
                 
-                zip_path = backup_manager.create_backup_zip(folder_path, folder_type)
+                zip_path = self.create_zip_archive(backup_manager, folder_path, folder_type)
                 
             elif selected.startswith('[Задача]'):
                 # Архивируем всю папку задачи
                 task_name = selected.split('] ')[1]
                 folder_path = os.path.join(self.month_path, task_name)
-                zip_path
-
-                # После создания архива, уведомляем пользователя
+                zip_path = self.create_zip_archive(backup_manager, folder_path)
+            
+            # После создания архива, уведомляем пользователя
             if zip_path:
                 sublime.status_message(f"FTP Backup: Архив успешно создан по пути: {zip_path}")
             else:
@@ -650,3 +666,88 @@ class FtpBackupCreateZipCommand(sublime_plugin.WindowCommand):
         
         except Exception as e:
             sublime.error_message(f"Ошибка при создании архива: {str(e)}")
+    
+    def create_zip_archive(self, backup_manager, folder_path, folder_type=None):
+        """
+        Создание ZIP-архива для указанной папки
+        """
+        try:
+            if not os.path.exists(folder_path):
+                sublime.status_message(f"FTP Backup: Папка для архивации не существует: {folder_path}")
+                return None
+            
+            # Приводим путь к стандартному виду Windows
+            folder_path = os.path.normpath(folder_path)
+            
+            # Извлекаем имя сайта безопасным способом
+            folder_parts = folder_path.split(os.sep)
+            # Удаляем пустые элементы
+            folder_parts = [part for part in folder_parts if part]
+            
+            # Находим имя сайта 
+            site_name = "backup"  # значение по умолчанию
+            for part in folder_parts:
+                if re.match(r'[\w\-_.]+', part) and not part.startswith('task_') and part not in ['before', 'after']:
+                    site_name = part
+                    break
+            
+            # Формируем безопасное имя архива без недопустимых символов
+            safe_site_name = re.sub(r'[\\/:*?"<>|]', '_', site_name)
+            date_str = datetime.now().strftime("%d.%m.%Y.%H%M")
+            
+            if folder_type:
+                zip_name = f"backup_{safe_site_name}_{folder_type}_{date_str}.zip"
+            else:
+                zip_name = f"backup_{safe_site_name}_{date_str}.zip"
+            
+            # Определяем папку для создания архива
+            if any(part.startswith('task_') for part in folder_parts):
+                # Если находимся в папке задачи
+                for i, part in enumerate(folder_parts):
+                    if part.startswith('task_'):
+                        task_folder_index = i
+                        break
+                
+                # Формируем путь до папки задачи (включительно)
+                task_path_parts = folder_parts[:task_folder_index+1]
+                # Если Windows путь, добавляем диск
+                if ':' in folder_path:
+                    drive = folder_path.split(':')[0] + ':'
+                    zip_dir = os.path.join(drive, os.sep, *task_path_parts)
+                else:
+                    zip_dir = os.path.join(os.sep, *task_path_parts)
+            else:
+                # Если находимся в папке месяца или корневой папке
+                zip_dir = os.path.dirname(folder_path)
+                
+                # Если текущая папка - before/after, поднимаемся на уровень выше
+                if os.path.basename(folder_path) in ['before', 'after']:
+                    zip_dir = os.path.dirname(zip_dir)
+            
+            # Формируем полный путь к ZIP
+            zip_path = os.path.join(zip_dir, zip_name)
+            
+            # Убеждаемся, что директория существует
+            os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+            
+            backup_manager.logger.debug(f"Создание архива: {zip_path}")
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(folder_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, folder_path)
+                        zipf.write(file_path, arcname)
+                        backup_manager.logger.debug(f"Добавлен файл {arcname}")
+            
+            backup_manager.logger.debug(f"Архив успешно создан: {zip_path}")
+            
+            # Сбрасываем текущий номер задачи после создания архива
+            global CURRENT_TASK_NUMBER
+            CURRENT_TASK_NUMBER = None
+            backup_manager.logger.debug("Номер текущей задачи сброшен после создания архива")
+            
+            return zip_path
+            
+        except Exception as e:
+            backup_manager.logger.error(f"Ошибка создания архива: {e}")
+            return None
