@@ -177,9 +177,10 @@ class FtpBackupManager:
                 self.logger.debug(f"Используется существующая папка для месяца: {current_month_year}")
             
             # Добавляем папку с номером задачи, если указан
+            # Добавляем папку задачи, если указана
             if task_number:
-                task_folder = os.path.join(month_year_folder, f"task_{task_number}")
-                self.logger.debug(f"Используется папка задачи: {task_number}")
+               task_folder = os.path.join(month_year_folder, task_number)
+               self.logger.debug(f"Используется папка задачи: {task_number}")
             else:
                 task_folder = month_year_folder
                 self.logger.debug("Используется папка без номера задачи")
@@ -382,7 +383,7 @@ class FtpBackupSaveCommand(sublime_plugin.TextCommand):
         else:
             # Иначе запрашиваем новый номер задачи
             self.view.window().show_input_panel(
-                "Введите номер задачи:", 
+                "Введите название папки задачи:", 
                 "", 
                 lambda task_number: self.save_with_backup(file_path, task_number), 
                 None, 
@@ -458,7 +459,7 @@ class FtpBackupCreateBeforeCommand(sublime_plugin.TextCommand):
         else:
             # Иначе запрашиваем новый номер задачи
             self.view.window().show_input_panel(
-                "Введите номер задачи:", 
+                "Введите название папки задачи:", 
                 "", 
                 lambda task_number: self.create_before_backup(file_path, task_number), 
                 None, 
@@ -504,7 +505,7 @@ class FtpBackupCreateAfterCommand(sublime_plugin.TextCommand):
         else:
             # Иначе запрашиваем новый номер задачи
             self.view.window().show_input_panel(
-                "Введите номер задачи:", 
+                "Введите название папки задачи:", 
                 "", 
                 lambda task_number: self.create_after_backup(file_path, task_number), 
                 None, 
@@ -586,9 +587,9 @@ class FtpBackupCreateZipCommand(sublime_plugin.WindowCommand):
         items = [d for d in os.listdir(month_path) 
                 if os.path.isdir(os.path.join(month_path, d))]
         
-        # Разделяем на задачи и папки before/after на корневом уровне
-        tasks = [d for d in items if d.startswith('task_')]
+       # Разделяем на задачи и папки before/after на корневом уровне
         root_folders = [d for d in items if d in ['before', 'after']]
+        tasks = [d for d in items if d not in ['before', 'after']]  # Все остальные папки считаем задачами
         
         all_options = []
         
