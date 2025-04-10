@@ -281,7 +281,7 @@ def create_backup_zip(self, folder_path, folder_type=None):
         
         # Формируем безопасное имя архива без недопустимых символов
         safe_site_name = re.sub(r'[\\/:*?"<>|]', '_', site_name)
-        date_str = datetime.now().strftime("%d.%m.%Y.%H%M")
+        date_str = datetime.now().strftime("%d.%m.%Y.%H.%M")
         
         if folder_type:
             zip_name = f"backup_{safe_site_name}_{folder_type}_{date_str}.zip"
