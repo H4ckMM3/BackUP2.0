@@ -1,0 +1,14 @@
+[
+    {
+        "caption": "FTP Backup: Create Before Backup",
+        "command": "ftp_backup_create_before"
+    },
+    {
+        "caption": "FTP Backup: Create After Backup", 
+        "command": "ftp_backup_create_after"
+    },
+    {
+        "caption": "FTP Backup: Create ZIP Archive",
+        "command": "ftp_backup_create_zip"
+    }
+]

@@ -1,0 +1,25 @@
+[
+    // Назначаем комбинацию Ctrl+Shift+R для сохранения с бэкапом
+    {
+        "keys": ["ctrl+shift+r"],
+        "command": "ftp_backup_save"
+    },
+    
+    // Перехватываем и блокируем стандартное сохранение Ctrl+S
+    {
+        "keys": ["ctrl+s"],
+        "command": "noop"
+    },
+    
+    // Перехватываем и блокируем Ctrl+Shift+S (Save As...)
+    {
+        "keys": ["ctrl+shift+s"],  
+        "command": "noop"
+    },
+    
+    // Перехватываем и блокируем другие комбинации для сохранения
+    {
+        "keys": ["alt+shift+s"],
+        "command": "noop"
+    }
+]
